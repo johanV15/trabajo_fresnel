@@ -17,7 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 from math import sqrt
-from typing import List
+from typing import List, Optional
 
 VELOCIDAD_LUZ_M_S = 299_792_458.0
 """Velocidad de la luz en el vacío. Se usa como aproximación de la velocidad
@@ -131,7 +131,10 @@ class MuestraAnalisis:
     abultamiento_m: float
     altura_linea_vista_m: float
     holgura_m: float
-    despeje_pct: float
+    despeje_pct: Optional[float]
+    """Holgura como porcentaje del radio F1. `None` en las antenas mismas,
+    donde el radio de F1 es cero y el porcentaje no está definido (no hay
+    "zona" de la cual ser un porcentaje)."""
 
 
 @dataclass(frozen=True)
@@ -212,11 +215,9 @@ def analizar_enlace(
     grande es la zona de Fresnel en ese punto del trayecto.
 
     En las antenas mismas (d1 = 0 o d2 = 0) el radio de F1 es cero por
-    definición — no hay zona que invadir ahí — así que esos puntos no
-    participan en la búsqueda del punto crítico; se les asigna despeje
-    infinito (positivo si la torre está sobre el terreno, como es siempre el
-    caso) para que nunca sean, por sí mismos, el punto que decide el
-    veredicto.
+    definición — no hay zona que invadir ahí — así que el porcentaje de
+    despeje no está definido en esos puntos (`despeje_pct = None`) y quedan
+    excluidos de la búsqueda del punto crítico.
 
     El veredicto global lo determina la muestra de menor `despeje_pct`:
     - `despeje_pct >= criterio_despeje_pct` en el punto crítico -> VIABLE.
@@ -253,10 +254,11 @@ def analizar_enlace(
         terreno_efectivo_m = punto.elevacion_msnm + abultamiento_m
         holgura_m = altura_linea_vista_m - terreno_efectivo_m
 
+        despeje_pct: Optional[float]
         if radio_f1_m > _RADIO_MINIMO_SIGNIFICATIVO_M:
             despeje_pct = holgura_m / radio_f1_m * 100.0
         else:
-            despeje_pct = float("inf") if holgura_m >= 0 else float("-inf")
+            despeje_pct = None
 
         muestras.append(
             MuestraAnalisis(
@@ -271,7 +273,14 @@ def analizar_enlace(
             )
         )
 
-    critica = min(muestras, key=lambda m: m.despeje_pct)
+    critica = min(
+        muestras, key=lambda m: m.despeje_pct if m.despeje_pct is not None else float("inf")
+    )
+    if critica.despeje_pct is None:
+        raise ValueError(
+            "todas las muestras del perfil caen en los extremos del enlace "
+            "(radio F1 = 0); agrega puntos intermedios al perfil"
+        )
 
     if critica.despeje_pct < 0:
         estado = EstadoEnlace.LOS_BLOQUEADA
