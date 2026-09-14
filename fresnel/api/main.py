@@ -9,6 +9,7 @@ a la salida.
 from __future__ import annotations
 
 import json
+from contextlib import asynccontextmanager
 from enum import Enum
 from pathlib import Path
 from typing import List, Optional
@@ -25,6 +26,7 @@ from core.elevation import (
     ErrorLimiteTasa,
     ErrorRed,
     ErrorRespuestaInvalida,
+    ErrorSinDatosDeElevacion,
     OpenTopoData,
     PuntoConsulta,
 )
@@ -229,6 +231,18 @@ class DemoCompleto(ResumenDemo):
 
 # --- Aplicación ---
 
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    # `_precargar_elevaciones_demos` se define más abajo en este mismo
+    # módulo; para cuando esto se ejecuta de verdad (al arrancar el
+    # servidor) el módulo ya terminó de cargar por completo, así que el
+    # nombre existe. Ver esa función para el porqué (sección 7.3 de la
+    # especificación: los demos deben responder sin red).
+    _precargar_elevaciones_demos()
+    yield
+
+
 app = FastAPI(
     title="Diagnóstico de Primera Zona de Fresnel",
     description=(
@@ -237,6 +251,7 @@ app = FastAPI(
         "de cada antena y la frecuencia de operación."
     ),
     version="0.1.0",
+    lifespan=_lifespan,
 )
 
 app.add_middleware(
@@ -273,6 +288,26 @@ async def _manejar_error_validacion(
         mensaje = f"dato inválido en '{campo}': {primer_error['msg']}"
 
     return JSONResponse(status_code=400, content={"detail": mensaje})
+
+
+@app.exception_handler(Exception)
+async def _manejar_error_inesperado(request: Request, exc: Exception) -> JSONResponse:
+    """Red de seguridad final: sin esto, cualquier excepción no prevista
+    (por ejemplo, un ValueError interno de core/ que ningún except
+    específico esperaba) la devolvería FastAPI como un 500 genérico en
+    inglés ("Internal Server Error"), sin traducir. No se incluye el
+    texto de `exc` ni ningún traceback en la respuesta — eso son detalles
+    internos, no un mensaje accionable para quien usa la app."""
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": (
+                "Ocurrió un error inesperado en el servidor al procesar la "
+                "solicitud. Intenta de nuevo; si persiste, revisa que las "
+                "coordenadas y la frecuencia sean válidas."
+            )
+        },
+    )
 
 
 @app.post(
@@ -332,6 +367,16 @@ def analizar(solicitud: SolicitudAnalisis) -> RespuestaAnalisis:
             detail=(
                 "No se pudo contactar la API de elevación (problema de red o "
                 f"del servidor remoto). Detalle: {exc}"
+            ),
+        ) from exc
+    except ErrorSinDatosDeElevacion as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "No hay datos de elevación para uno o más puntos del trayecto: "
+                "puede que el enlace cruce el mar, o que alguno de los puntos "
+                "esté fuera de la cobertura del dataset SRTM (~60° de latitud "
+                f"norte/sur). Verifica las coordenadas de A y B. Detalle: {exc}"
             ),
         ) from exc
     except ErrorRespuestaInvalida as exc:
@@ -418,7 +463,6 @@ def _cargar_demos() -> dict:
     return demos
 
 
-@app.on_event("startup")
 def _precargar_elevaciones_demos() -> None:
     """Inyecta en la caché de elevaciones en memoria las elevaciones
     congeladas de cada caso demo (generadas por

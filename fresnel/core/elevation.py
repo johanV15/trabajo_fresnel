@@ -59,6 +59,15 @@ class ErrorRespuestaInvalida(ErrorElevacion):
     estado o contenido que no se puede interpretar como elevaciones."""
 
 
+class ErrorSinDatosDeElevacion(ErrorRespuestaInvalida):
+    """La API respondió correctamente pero sin dato de elevación para uno o
+    más puntos consultados — típicamente porque caen sobre el mar, donde
+    el dataset SRTM no tiene cobertura terrestre. Es un caso normal y
+    esperable en enlaces muy largos, no una respuesta malformada; se
+    distingue de `ErrorRespuestaInvalida` para poder dar un mensaje
+    específico y accionable en vez de uno genérico."""
+
+
 # --- Interfaz ---
 
 
@@ -154,20 +163,28 @@ class OpenTopoData(FuenteElevacion):
 
             if respuesta.status_code != 200:
                 # Error del lado del cliente (400, etc.): no es transitorio,
-                # reintentar no lo va a arreglar.
+                # reintentar no lo va a arreglar. No se incluye el cuerpo
+                # crudo de la respuesta en el mensaje: puede venir en
+                # inglés o en HTML, y este mensaje es visible para el
+                # usuario final (vía api/main.py).
                 raise ErrorRespuestaInvalida(
-                    f"Open-Topo-Data respondió {respuesta.status_code}: "
-                    f"{respuesta.text[:200]}"
+                    f"Open-Topo-Data respondió con un error inesperado "
+                    f"(código {respuesta.status_code})"
                 )
 
             return self._parsear_respuesta(respuesta, len(lote))
 
+        # No se interpola `ultimo_error` en el mensaje: si viene de
+        # httpx (ej. httpx.ConnectError), su texto está en inglés, y este
+        # mensaje es lo que ve el usuario final tal cual (vía
+        # api/main.py). El detalle técnico queda disponible para quien
+        # depure en consola/logs a través de `raise ... from ultimo_error`.
         if isinstance(ultimo_error, ErrorLimiteTasa):
             raise ultimo_error
         raise ErrorRed(
             f"no se pudo consultar Open-Topo-Data tras {self._max_reintentos} "
-            f"intentos: {ultimo_error}"
-        )
+            "intentos (fallo de red repetido)"
+        ) from ultimo_error
 
     @staticmethod
     def _parsear_respuesta(respuesta: httpx.Response, n_esperado: int) -> List[float]:
@@ -186,6 +203,13 @@ class OpenTopoData(FuenteElevacion):
             n_llegados = len(resultados) if isinstance(resultados, list) else "ninguno"
             raise ErrorRespuestaInvalida(
                 f"se esperaban {n_esperado} resultados, llegaron {n_llegados}"
+            )
+
+        if any(r.get("elevation") is None for r in resultados if isinstance(r, dict)):
+            raise ErrorSinDatosDeElevacion(
+                "el dataset SRTM no tiene elevación para uno o más puntos del "
+                "trayecto (puede ser que caigan sobre el mar, o fuera de la "
+                "cobertura de SRTM, que llega hasta ~60° de latitud norte y sur)"
             )
 
         try:

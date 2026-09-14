@@ -4,27 +4,286 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Diagnóstico de Primera Zona de Fresnel</title>
+    <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <header>
-      <h1>Diagnóstico de primera zona de Fresnel</h1>
-      <p class="subtitulo">
-        Ingeniería Telemática — Universidad Distrital Francisco José de Caldas
-      </p>
-    </header>
+    <div class="app">
+      <header class="nav">
+        <div class="nav-brand">RADIOENLACE</div>
+        <div class="nav-sub" id="resumen-cabecera" aria-live="polite">
+          Diagnóstico de primera zona de Fresnel
+        </div>
+      </header>
 
-    <section class="controles">
-      <button type="button" data-demo="despejado">Caso demo: despejado</button>
-      <button type="button" data-demo="obstruido">Caso demo: obstruido</button>
-      <button type="button" data-demo="marginal">Caso demo: marginal</button>
-    </section>
+      <main class="main">
+        <div
+          id="banner-estado"
+          class="estado-banner"
+          role="status"
+          aria-live="polite"
+          hidden
+        >
+          <span id="banner-estado-texto"></span>
+          <button type="button" class="btn" id="banner-estado-reintentar" hidden>
+            Reintentar
+          </button>
+        </div>
 
-    <section id="veredicto" class="veredicto">Cargando…</section>
+        <div class="demo-toolbar">
+          <span class="demo-toolbar-label">Casos demo</span>
+          <button type="button" class="btn" data-demo="despejado">Despejado</button>
+          <button type="button" class="btn" data-demo="obstruido">Obstruido</button>
+          <button type="button" class="btn" data-demo="marginal">Marginal</button>
+        </div>
 
-    <section id="grafico" class="grafico"></section>
+        <div class="fila-entrada">
+          <div class="panel panel-sitios">
+            <div class="sitio-row" data-sitio="A">
+              <div class="sitio-main">
+                <div class="sitio-badge">A</div>
+                <div class="sitio-coords">
+                  <div class="sitio-coords-label">SITIO A — LAT / LON</div>
+                  <div class="sitio-coords-inputs">
+                    <input
+                      class="input"
+                      id="lat-a"
+                      type="number"
+                      step="0.0001"
+                      min="-90"
+                      max="90"
+                      inputmode="decimal"
+                      aria-label="Latitud del sitio A"
+                    />
+                    <input
+                      class="input"
+                      id="lon-a"
+                      type="number"
+                      step="0.0001"
+                      min="-180"
+                      max="180"
+                      inputmode="decimal"
+                      aria-label="Longitud del sitio A"
+                    />
+                  </div>
+                  <div class="field-error" id="error-a" aria-live="polite"></div>
+                </div>
+              </div>
+              <div class="sitio-altura">
+                <div class="altura-gauge">
+                  <div class="altura-gauge-fill" id="gauge-a" style="height: 20%"></div>
+                </div>
+                <input
+                  class="input"
+                  id="altura-a"
+                  type="number"
+                  step="1"
+                  min="0"
+                  aria-label="Altura de la torre A, en metros"
+                />
+              </div>
+            </div>
+            <div class="sitio-row" data-sitio="B">
+              <div class="sitio-main">
+                <div class="sitio-badge">B</div>
+                <div class="sitio-coords">
+                  <div class="sitio-coords-label">SITIO B — LAT / LON</div>
+                  <div class="sitio-coords-inputs">
+                    <input
+                      class="input"
+                      id="lat-b"
+                      type="number"
+                      step="0.0001"
+                      min="-90"
+                      max="90"
+                      inputmode="decimal"
+                      aria-label="Latitud del sitio B"
+                    />
+                    <input
+                      class="input"
+                      id="lon-b"
+                      type="number"
+                      step="0.0001"
+                      min="-180"
+                      max="180"
+                      inputmode="decimal"
+                      aria-label="Longitud del sitio B"
+                    />
+                  </div>
+                  <div class="field-error" id="error-b" aria-live="polite"></div>
+                </div>
+              </div>
+              <div class="sitio-altura">
+                <div class="altura-gauge">
+                  <div class="altura-gauge-fill" id="gauge-b" style="height: 27%"></div>
+                </div>
+                <input
+                  class="input"
+                  id="altura-b"
+                  type="number"
+                  step="1"
+                  min="0"
+                  aria-label="Altura de la torre B, en metros"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div class="panel-frecuencia">
+            <div class="frecuencia-cabecera">
+              <div class="frecuencia-valor">
+                <span class="kicker">Frecuencia</span>
+                <span class="valor" id="freq-valor">5,0</span>
+                <span class="unidad" id="freq-unidad">GHz</span>
+              </div>
+              <div class="frecuencia-presets">
+                <button type="button" class="btn" data-preset="900">900 MHz</button>
+                <button type="button" class="btn" data-preset="2400">2,4 GHz</button>
+                <button type="button" class="btn" data-preset="5000">5 GHz</button>
+                <button type="button" class="btn" data-preset="5800">5,8 GHz</button>
+                <div class="field">
+                  <label for="freq-custom">MHz exacto</label>
+                  <input class="input" id="freq-custom" type="number" step="1" min="1" />
+                </div>
+              </div>
+            </div>
+            <div
+              class="ruler"
+              id="ruler-track"
+              role="slider"
+              tabindex="0"
+              aria-label="Frecuencia de operación"
+              aria-valuemin="400"
+              aria-valuemax="40000"
+              aria-valuenow="5000"
+              aria-valuetext="5,0 GHz"
+            >
+              <div class="ruler-edge-label" style="left: 6px">400 MHz</div>
+              <div class="ruler-edge-label" style="right: 6px">40 GHz</div>
+              <div class="ruler-fader" id="ruler-fader"></div>
+              <div class="ruler-lens" id="ruler-lens">5,0 GHz</div>
+            </div>
+            <div class="field-error" id="error-freq" aria-live="polite"></div>
+          </div>
+        </div>
+
+        <div class="grid-principal">
+          <div class="col-grafico">
+            <div class="panel panel-grafico">
+              <div class="panel-grafico-cabecera">
+                <h3>Perfil del terreno — corte A–B</h3>
+              </div>
+              <div id="grafico" aria-label="Gráfico del perfil del enlace y la zona de Fresnel"></div>
+            </div>
+          </div>
+
+          <div class="col-lateral">
+            <div class="panel veredicto" id="veredicto">
+              <div class="veredicto-cabecera">
+                <div class="veredicto-kicker" id="veredicto-kicker">DICTAMEN DEL ENLACE</div>
+                <h2 class="veredicto-titulo" id="veredicto-titulo">Cargando…</h2>
+              </div>
+              <div class="hr"></div>
+              <div class="veredicto-stats">
+                <div class="veredicto-stat">
+                  <div class="veredicto-stat-label">DESPEJE EN PUNTO CRÍTICO</div>
+                  <div class="veredicto-stat-valor" id="veredicto-despeje">
+                    —<span class="unidad">%</span>
+                  </div>
+                </div>
+                <div class="veredicto-stat">
+                  <div class="veredicto-stat-label">PUNTO CRÍTICO DESDE A</div>
+                  <div class="veredicto-stat-valor" id="veredicto-km">
+                    —<span class="unidad">km</span>
+                  </div>
+                </div>
+              </div>
+              <div class="hr"></div>
+              <div class="veredicto-explicacion" id="veredicto-explicacion" aria-live="polite">
+                Cargando el primer caso demo…
+              </div>
+            </div>
+
+            <div class="panel panel-valores">
+              <h4><span class="kicker">Valores calculados</span></h4>
+              <table class="table" id="tabla-valores">
+                <thead>
+                  <tr>
+                    <th>Parámetro</th>
+                    <th style="text-align: right">Valor</th>
+                    <th>Unidad</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+
+            <div class="panel panel-mapa">
+              <div class="mapa-cabecera">
+                <span class="kicker">Mapa</span>
+                <div class="seg">
+                  <label class="seg-opt">
+                    <input type="radio" name="mapa-objetivo" id="mapa-fijar-a" checked />
+                    Fijar A
+                  </label>
+                  <label class="seg-opt">
+                    <input type="radio" name="mapa-objetivo" id="mapa-fijar-b" />
+                    Fijar B
+                  </label>
+                </div>
+              </div>
+              <div id="mapa"></div>
+              <div class="mapa-caption" id="mapa-caption">
+                Clic en el mapa para fijar el punto seleccionado.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <details class="panel avanzado">
+          <summary>Parámetros avanzados</summary>
+          <div class="avanzado-body">
+            <div class="field">
+              <label for="param-k">Factor k (radio terrestre efectivo)</label>
+              <input class="input" id="param-k" type="number" step="0.01" min="0.01" max="3" value="1.33" />
+            </div>
+            <div class="field">
+              <label for="param-criterio">Criterio de despeje</label>
+              <input
+                class="input"
+                id="param-criterio"
+                type="number"
+                step="1"
+                min="0"
+                max="100"
+                value="60"
+              />
+            </div>
+          </div>
+        </details>
+
+        <footer class="footer">
+          <div>
+            <div class="footer-label">AUTOR</div>
+            <div class="footer-valor">Johan Stiven Ventura Vanegas</div>
+          </div>
+          <div>
+            <div class="footer-label">ASIGNATURA</div>
+            <div class="footer-valor">
+              Redes Inalámbricas — Universidad Distrital Francisco José de Caldas
+            </div>
+          </div>
+          <div>
+            <div class="footer-label">DOCENTE</div>
+            <div class="footer-valor">Marlon Pantiño Bernal</div>
+          </div>
+        </footer>
+      </main>
+    </div>
 
     <script src="vendor/plotly-2.35.2.min.js"></script>
+    <script src="vendor/leaflet/leaflet.js"></script>
+    <script src="fresnel.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

@@ -183,3 +183,24 @@ def test_altura_torre_cero_es_valida():
     # Con torres a ras de suelo y terreno plano, la LOS coincide con el
     # terreno salvo por el abultamiento de curvatura: holgura negativa.
     assert resultado.veredicto.estado is EstadoEnlace.LOS_BLOQUEADA
+
+
+def test_perfil_solo_con_extremos_no_tiene_punto_critico():
+    """Un perfil de exactamente 2 muestras (A y B) no tiene ningún punto
+    intermedio: el radio F1 es cero en ambas (están en las antenas), así
+    que no hay ninguna muestra con despeje definido y no se puede emitir
+    veredicto. Caso degenerado, no se espera en uso real (el muestreo
+    real siempre da >=200 puntos), pero debe fallar explícitamente."""
+    perfil = [
+        MuestraTerreno(latitud=0.0, longitud=0.0, distancia_acumulada_m=0.0, elevacion_msnm=100.0),
+        MuestraTerreno(latitud=0.0, longitud=0.0, distancia_acumulada_m=10_000.0, elevacion_msnm=100.0),
+    ]
+    with pytest.raises(ValueError):
+        analizar_enlace(
+            perfil,
+            elevacion_msnm_a=100.0,
+            altura_torre_a_m=10.0,
+            elevacion_msnm_b=100.0,
+            altura_torre_b_m=10.0,
+            frecuencia_hz=5e9,
+        )

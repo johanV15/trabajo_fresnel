@@ -10,6 +10,7 @@ from core.elevation import (
     ErrorLimiteTasa,
     ErrorRed,
     ErrorRespuestaInvalida,
+    ErrorSinDatosDeElevacion,
     OpenTopoData,
     PuntoConsulta,
 )
@@ -171,6 +172,63 @@ def test_error_respuesta_invalida_json_roto():
         fuente.consultar([PuntoConsulta(4.6, -74.1)])
 
 
+def test_error_respuesta_invalida_numero_de_resultados_incorrecto():
+    def handler(request: httpx.Request) -> httpx.Response:
+        # Se piden 2 puntos pero el servidor solo devuelve 1 resultado.
+        return httpx.Response(200, json={"status": "OK", "results": [{"elevation": 100.0}]})
+
+    fuente = OpenTopoData(cliente_http=_cliente_con_handler(handler), intervalo_minimo_s=0.0)
+    with pytest.raises(ErrorRespuestaInvalida):
+        fuente.consultar([PuntoConsulta(4.6, -74.1), PuntoConsulta(4.7, -74.2)])
+
+
+def test_error_sin_datos_de_elevacion_punto_sobre_el_mar():
+    """Open-Topo-Data responde OK pero con elevation:null para un punto sin
+    cobertura SRTM (típicamente mar). Debe distinguirse de una respuesta
+    malformada para poder dar un mensaje accionable ("elige tierra firme")."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "status": "OK",
+                "results": [{"elevation": 100.0}, {"elevation": None}],
+            },
+        )
+
+    fuente = OpenTopoData(cliente_http=_cliente_con_handler(handler), intervalo_minimo_s=0.0)
+    with pytest.raises(ErrorSinDatosDeElevacion):
+        fuente.consultar([PuntoConsulta(4.6, -74.1), PuntoConsulta(0.0, -80.0)])
+
+
+def test_error_respuesta_invalida_sin_campo_elevation():
+    """Falta el campo 'elevation' por completo (ni siquiera null):
+    `.get('elevation')` devuelve None igual que en el caso de "sin datos",
+    así que también se clasifica como ErrorSinDatosDeElevacion (subclase
+    de ErrorRespuestaInvalida) — sigue sin ser un crash silencioso."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"status": "OK", "results": [{"location": {}}]})
+
+    fuente = OpenTopoData(cliente_http=_cliente_con_handler(handler), intervalo_minimo_s=0.0)
+    with pytest.raises(ErrorRespuestaInvalida):
+        fuente.consultar([PuntoConsulta(4.6, -74.1)])
+
+
+def test_error_respuesta_invalida_elevation_no_numerica():
+    """Caso distinto del anterior: el campo 'elevation' SÍ está presente y
+    no es null, pero no es un número (respuesta realmente malformada, no
+    "sin datos en esta ubicación")."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"status": "OK", "results": [{"elevation": "no-numerico"}]})
+
+    fuente = OpenTopoData(cliente_http=_cliente_con_handler(handler), intervalo_minimo_s=0.0)
+    with pytest.raises(ErrorRespuestaInvalida) as excinfo:
+        fuente.consultar([PuntoConsulta(4.6, -74.1)])
+    assert not isinstance(excinfo.value, ErrorSinDatosDeElevacion)
+
+
 def test_error_respuesta_invalida_400_no_reintenta():
     llamadas = []
 
@@ -268,3 +326,17 @@ def test_cache_archivo_corrupto_se_ignora_sin_fallar(tmp_path):
     cache = CacheElevacionEnDisco(fuente_falsa, ruta)
     resultado = cache.consultar([PuntoConsulta(4.6, -74.1)])
     assert resultado == [1000.0]
+
+
+def test_precargar_evita_consultar_la_fuente(tmp_path):
+    """precargar() es lo que usa api/main.py al arrancar para que los casos
+    demo respondan sin red (ver Contexto/PROYECTO-FRESNEL.md, sección 7.3)."""
+    ruta = tmp_path / "elevaciones.json"
+    fuente_falsa = _FuenteFalsa()
+    cache = CacheElevacionEnDisco(fuente_falsa, ruta)
+
+    cache.precargar({"4.6000,-74.1000": 2613.0})
+    resultado = cache.consultar([PuntoConsulta(4.6, -74.1)])
+
+    assert resultado == [2613.0]
+    assert len(fuente_falsa.llamadas) == 0

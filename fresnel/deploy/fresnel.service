@@ -1,0 +1,33 @@
+# Unidad systemd para el servidor de la aplicación (uvicorn).
+# Instalar en /etc/systemd/system/fresnel.service — ver deploy/deploy.md.
+#
+# Supone que el proyecto vive en /opt/fresnel (el propio contenido de esta
+# carpeta "fresnel/", con core/, api/, web/, .venv/, cache/, etc.) y que
+# corre bajo un usuario de sistema dedicado "fresnel" (sin privilegios,
+# sin shell de login).
+
+[Unit]
+Description=Diagnostico de Primera Zona de Fresnel (FastAPI/uvicorn)
+After=network.target
+
+[Service]
+Type=simple
+User=fresnel
+Group=fresnel
+WorkingDirectory=/opt/fresnel
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/fresnel/.venv/bin/uvicorn api.main:app --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=5
+
+# Endurecimiento: el proceso no necesita privilegios ni acceso de
+# escritura fuera de su propia caché de elevaciones.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/fresnel/cache
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target
