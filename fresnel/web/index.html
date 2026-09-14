@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Diagnóstico de Primera Zona de Fresnel</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Diagnóstico de primera zona de Fresnel</h1>
+      <p class="subtitulo">
+        Ingeniería Telemática — Universidad Distrital Francisco José de Caldas
+      </p>
+    </header>
+
+    <section class="controles">
+      <button type="button" data-demo="despejado">Caso demo: despejado</button>
+      <button type="button" data-demo="obstruido">Caso demo: obstruido</button>
+      <button type="button" data-demo="marginal">Caso demo: marginal</button>
+    </section>
+
+    <section id="veredicto" class="veredicto">Cargando…</section>
+
+    <section id="grafico" class="grafico"></section>
+
+    <script src="vendor/plotly-2.35.2.min.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

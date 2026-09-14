@@ -214,7 +214,11 @@ class OpenTopoData(FuenteElevacion):
 # --- Envoltorio de caché en disco ---
 
 
-def _clave_cache(lat: float, lon: float) -> str:
+def clave_cache(lat: float, lon: float) -> str:
+    """Clave de caché para una coordenada, con el mismo redondeo que usa
+    internamente `CacheElevacionEnDisco`. Pública para que otros scripts
+    (por ejemplo `scripts/generar_demos.py`) puedan congelar elevaciones en
+    un formato compatible con el que esta clase espera leer."""
     lat_r = round(lat, _PRECISION_DECIMALES_CACHE)
     lon_r = round(lon, _PRECISION_DECIMALES_CACHE)
     return f"{lat_r:.4f},{lon_r:.4f}"
@@ -253,7 +257,7 @@ class CacheElevacionEnDisco(FuenteElevacion):
         )
 
     def consultar(self, puntos: Sequence[PuntoConsulta]) -> List[float]:
-        claves = [_clave_cache(p.latitud, p.longitud) for p in puntos]
+        claves = [clave_cache(p.latitud, p.longitud) for p in puntos]
         indices_faltantes = [i for i, c in enumerate(claves) if c not in self._datos]
 
         if indices_faltantes:
@@ -264,3 +268,14 @@ class CacheElevacionEnDisco(FuenteElevacion):
             self._guardar()
 
         return [self._datos[c] for c in claves]
+
+    def precargar(self, elevaciones: Dict[str, float]) -> None:
+        """Agrega entradas ya conocidas a la caché en memoria sin consultar
+        la fuente envuelta ni tocar el archivo en disco de inmediato.
+
+        Existe para los casos demo (sección 7.1 de la especificación): sus
+        elevaciones vienen congeladas en `data/demos/` versionadas en el
+        repositorio, y se cargan aquí al iniciar la aplicación para que
+        respondan sin red aunque la API de elevación no esté disponible.
+        """
+        self._datos.update(elevaciones)

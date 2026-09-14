@@ -399,16 +399,39 @@ def _cargar_demos() -> dict:
 
     Se relee del disco en cada llamada en vez de cachear en memoria: son
     pocos archivos pequeños y así un caso agregado o corregido en disco se
-    refleja sin reiniciar el servidor.
+    refleja sin reiniciar el servidor. El campo `elevaciones` de cada
+    archivo no se expone aquí (ver `_precargar_elevaciones_demos`): son las
+    elevaciones congeladas del perfil, no parte de la respuesta pública.
     """
     demos: dict = {}
     if not _DIRECTORIO_DEMOS.exists():
         return demos
     for archivo in sorted(_DIRECTORIO_DEMOS.glob("*.json")):
         datos = json.loads(archivo.read_text(encoding="utf-8"))
-        demo = DemoCompleto(**datos)
+        demo = DemoCompleto(
+            id=datos["id"],
+            nombre=datos["nombre"],
+            descripcion=datos["descripcion"],
+            parametros=datos["parametros"],
+        )
         demos[demo.id] = demo
     return demos
+
+
+@app.on_event("startup")
+def _precargar_elevaciones_demos() -> None:
+    """Inyecta en la caché de elevaciones en memoria las elevaciones
+    congeladas de cada caso demo (generadas por
+    `scripts/generar_demos.py`), para que /api/analizar responda a los
+    tres casos demo sin red aunque la API de elevación no esté disponible
+    (sección 7.3 de la especificación)."""
+    if not _DIRECTORIO_DEMOS.exists():
+        return
+    for archivo in sorted(_DIRECTORIO_DEMOS.glob("*.json")):
+        datos = json.loads(archivo.read_text(encoding="utf-8"))
+        elevaciones = datos.get("elevaciones")
+        if elevaciones:
+            fuente_elevacion.precargar(elevaciones)
 
 
 @app.get(
