@@ -1,0 +1,40 @@
+# Contexto (documentos de trabajo, no forman parte del proyecto)
+Contexto/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.Python
+build/
+dist/
+
+# Entornos virtuales
+.venv/
+venv/
+env/
+
+# Caché de elevaciones (se regenera en runtime)
+cache/
+
+# Tests / cobertura
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node (por si se usa alguna herramienta de desarrollo, no el runtime del frontend)
+node_modules/
+
+# Variables de entorno / secretos
+.env
+.env.*
+
+# Editor / SO
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log
