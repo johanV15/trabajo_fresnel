@@ -43,7 +43,7 @@
     LOS_BLOQUEADA: token("--color-bloqueada-bg") || "#f6e4e0",
   };
 
-  const RULER_MIN_MHZ = 400;
+  const RULER_MIN_MHZ = 100;
   const RULER_MAX_MHZ = 40000;
   const DEBOUNCE_PUNTOS_MS = 500;
 
@@ -600,7 +600,7 @@
   }
 
   // ---------------------------------------------------------------------
-  // Control de frecuencia: regla logarítmica 400 MHz – 40 GHz + presets
+  // Control de frecuencia: regla logarítmica 100 MHz – 40 GHz + presets
   // ---------------------------------------------------------------------
   function formatoFrecuencia(mhz) {
     if (mhz >= 1000) return { valor: (mhz / 1000).toFixed(1).replace(".", ","), unidad: "GHz" };
@@ -804,7 +804,7 @@
 
   function generarTicksRegla() {
     const track = document.getElementById("ruler-track");
-    const referencias = [400, 900, 2400, 5000, 5800, 10000, 20000, 40000];
+    const referencias = [100, 400, 900, 2400, 5000, 5800, 10000, 20000, 40000];
     for (let mhz = RULER_MIN_MHZ; mhz <= RULER_MAX_MHZ; mhz *= 1.15) {
       const esReferencia = referencias.some((r) => Math.abs(Math.log(r / mhz)) < 0.05);
       const tick = document.createElement("div");
